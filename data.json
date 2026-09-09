@@ -105,7 +105,10 @@
           "icon": "🚶"
         }
       ],
-      "icon": "🌅"
+      "icon": "🌅",
+      "canAdd": true,
+      "addMode": "routine",
+      "canSkip": true
     },
     {
       "id": "day",
@@ -175,7 +178,11 @@
           "icon": "🧺"
         }
       ],
-      "icon": "🌤"
+      "icon": "🌤",
+      "canAdd": true,
+      "addMode": "day",
+      "expandable": true,
+      "canSkip": true
     },
     {
       "id": "evening",
