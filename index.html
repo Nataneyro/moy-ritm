@@ -133,6 +133,9 @@
   .add .icon{background:var(--accent-tint);color:var(--accent);font-size:22px;font-weight:400}
   .block .addform.main{margin:0 10px 14px}
 
+  .plan .row{cursor:default}
+  .plan .row:active{background:transparent}
+  .plan-hint{padding:0 18px 16px;color:var(--ink-soft);font-size:13.5px}
   .badge{display:inline-flex;align-items:center;white-space:nowrap;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px}
   .foot{text-align:center;color:var(--ink-soft);font-size:13px;margin-top:22px}
   .foot.full{color:var(--accent);font-weight:600}
@@ -173,6 +176,8 @@
   }
   var today = new Date();
   var todayKey = key(today);
+  var tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  var tomorrowKey = key(tomorrow);
   var WD = ["вс","пн","вт","ср","чт","пт","сб"];
 
   var open = {};       // раскрытые дела
@@ -222,19 +227,24 @@
     setDone(id, false);
   }
 
-  function customToday(){ return custom[todayKey] || []; }
-  function addTask(title){
+  function customOn(dk){ return custom[dk] || []; }
+  function customToday(){ return customOn(todayKey); }
+  function addTaskOn(dk, title){
     title = (title||"").trim(); if(!title) return;
-    if(!custom[todayKey]) custom[todayKey] = [];
-    custom[todayKey].push({ id:"c"+Date.now(), title:title, icon:"📌", own:true });
+    if(!custom[dk]) custom[dk] = [];
+    custom[dk].push({ id:"c"+Date.now(), title:title, icon:"📌", own:true });
     write(CKEY, custom);
   }
-  function delTask(id){
-    custom[todayKey] = customToday().filter(function(t){ return t.id !== id; });
+  function addTask(title){ addTaskOn(todayKey, title); }
+  function delTaskOn(dk, id){
+    custom[dk] = customOn(dk).filter(function(t){ return t.id !== id; });
     write(CKEY, custom);
-    setDone(id, false);
-    if (subs[todayKey]) { delete subs[todayKey][id]; write(SKEY, subs); }
+    if (dk === todayKey){
+      setDone(id, false);
+      if (subs[dk]) { delete subs[dk][id]; write(SKEY, subs); }
+    }
   }
+  function delTask(id){ delTaskOn(todayKey, id); }
 
   /* дело считается сделанным: если есть подзадачи — когда все они отмечены */
   function itemDone(dk, id){
@@ -445,6 +455,32 @@
       html += '</div>';
     }
 
+    var plan = data.tomorrow;
+    if (plan !== false){
+      var pl = customOn(tomorrowKey);
+      var wd = tomorrow.toLocaleDateString("ru-RU", {weekday:"long"});
+      html += '<div class="block plan">' +
+                '<div class="block-head">' +
+                  '<div class="block-title"><span class="block-icon">🌙</span>План на завтра' +
+                    '<span class="block-time">' + esc(wd) + '</span></div>' +
+                  '<div class="block-count">' + (pl.length ? pl.length + (pl.length === 1 ? ' дело' : ' дела') : "") + '</div>' +
+                '</div>' +
+                (pl.length
+                  ? pl.map(function(t){
+                      return '<div class="row" data-noop="1">' +
+                               '<div class="icon">' + esc(t.icon || "📌") + '</div>' +
+                               '<div class="row-text"><div class="row-title">' + esc(t.title) + '</div></div>' +
+                               '<div class="del" data-delplan="' + esc(t.id) + '">×</div>' +
+                             '</div>';
+                    }).join("")
+                  : '<div class="plan-hint">Наметь пару дел, пока день ещё в голове — завтра они будут в блоке «День»</div>') +
+                (addingFor === "__tomorrow"
+                  ? '<div class="addform main"><input id="newplan" type="text" placeholder="Что сделать завтра" maxlength="80">' +
+                    '<button type="button" id="planok">Готово</button></div>'
+                  : '<div class="add" data-addplan="1"><div class="icon">+</div>Добавить дело</div>') +
+              '</div>';
+    }
+
     html += '<div class="foot' + (doneCount === total && total ? " full" : "") + '">' +
             (doneCount === total && total ? "День закрыт полностью" : "Отмечай, что уже сделано") + '</div>';
 
@@ -463,6 +499,7 @@
     /* строка: раскрыть или отметить */
     Array.prototype.forEach.call(app.querySelectorAll(".row"), function(row){
       var id = row.getAttribute("data-id");
+      if (!id) return;
       var exp = row.getAttribute("data-exp");
       function act(){
         tap();
@@ -494,8 +531,11 @@
     on("[data-addsub]", function(el){ addingFor = el.getAttribute("data-addsub"); render(); });
     on("[data-addblock]", function(el){ addingFor = "__" + el.getAttribute("data-addblock"); render(); });
     on("[data-skip]", function(el){ setSkip(el.getAttribute("data-skip"), true); render(); });
+    on("[data-addplan]", function(){ addingFor = "__tomorrow"; render(); });
+    on("[data-delplan]", function(el){ delTaskOn(tomorrowKey, el.getAttribute("data-delplan")); render(); });
     on("[data-unskip]", function(el){ setSkip(el.getAttribute("data-unskip"), false); render(); });
 
+    setupInput("newplan", "planok", function(v){ addTaskOn(tomorrowKey, v); });
     setupInput("newsub", "subok", function(v){ addSub(addingFor, v); });
     setupInput("newtask", "taskok", function(v){
       var bid = addingFor.slice(2);
