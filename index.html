@@ -60,6 +60,18 @@
   }
   .phrase.pic span{position:relative;font-weight:650;max-width:22ch;text-shadow:0 1px 10px rgba(255,255,255,.9),0 1px 2px rgba(255,255,255,.9)}
 
+  .phrase.pic .pen{position:absolute;top:12px;right:14px;font-size:13px;opacity:.55}
+  .pedit{margin-top:14px;padding:18px;background:var(--card);border-radius:var(--r-card);box-shadow:var(--shadow)}
+  .pedit textarea{
+    width:100%;font:inherit;font-size:16px;line-height:1.45;color:var(--ink);
+    border:1.5px solid var(--line);border-radius:16px;padding:13px 15px;
+    background:var(--card);resize:vertical;min-height:92px;outline:none;
+  }
+  .pedit textarea:focus{border-color:var(--accent)}
+  .pedit .prow{display:flex;gap:10px;align-items:center;margin-top:10px}
+  .pedit button{font:inherit;font-weight:600;font-size:15px;border:0;border-radius:14px;padding:11px 20px;cursor:pointer;color:#fff;background:var(--accent)}
+  .pedit .reset{background:transparent;color:var(--ink-soft);font-weight:500;padding:11px 4px}
+
   /* неделя */
   .week{display:flex;justify-content:space-between;gap:6px;margin-top:14px;padding:14px 12px;background:var(--card);border-radius:var(--r-card);box-shadow:var(--shadow)}
   .day{flex:1;text-align:center}
@@ -166,10 +178,11 @@
   var SKEY = "moy-ritm.subs.v1";    // подзадачи
   var RKEY = "moy-ritm.routine.v1"; // свои постоянные дела
   var PKEY = "moy-ritm.skip.v1";    // пропущенные на день
-  var state = {}, custom = {}, subs = {}, routine = {}, skip = {};
+  var FKEY = "moy-ritm.phrase.v1";  // своя фраза дня
+  var state = {}, custom = {}, subs = {}, routine = {}, skip = {}, myPhrases = {};
   function read(k, def){ try { return JSON.parse(localStorage.getItem(k)) || def; } catch(e){ return def; } }
   function write(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
-  function loadAll(){ state = read(KEY,{}); custom = read(CKEY,{}); subs = read(SKEY,{}); routine = read(RKEY,{}); skip = read(PKEY,{}); }
+  function loadAll(){ state = read(KEY,{}); custom = read(CKEY,{}); subs = read(SKEY,{}); routine = read(RKEY,{}); skip = read(PKEY,{}); myPhrases = read(FKEY,{}); }
 
   function key(d){
     return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
@@ -204,6 +217,14 @@
     subs[todayKey][pid] = subs[todayKey][pid].filter(function(s){ return s.id !== sid; });
     write(SKEY, subs);
     setDone(sid, false);
+  }
+
+  var editingPhrase = false;
+  function myPhrase(){ return myPhrases[todayKey] || ""; }
+  function setPhrase(text){
+    text = (text||"").trim();
+    if (text) myPhrases[todayKey] = text; else delete myPhrases[todayKey];
+    write(FKEY, myPhrases);
   }
 
   function isSkipped(id){ return !!(skip[todayKey] && skip[todayKey][id]); }
@@ -384,12 +405,25 @@
       '</div>';
 
     var ph = data.phrases || [];
-    if (ph.length){
-      var seed = Math.floor((today - new Date(today.getFullYear(),0,0)) / 86400000);
+    var seed = Math.floor((today - new Date(today.getFullYear(),0,0)) / 86400000);
+    var fromList = ph.length ? ph[seed % ph.length] : "";
+    var shownPhrase = myPhrase() || fromList;
+
+    if (editingPhrase){
+      html += '<div class="pedit">' +
+                '<textarea id="phtext" maxlength="220" placeholder="Как я хочу, чтобы сложился день?">' +
+                  esc(myPhrase() || "") + '</textarea>' +
+                '<div class="prow">' +
+                  '<button type="button" id="phok">Сохранить</button>' +
+                  (myPhrase() ? '<button type="button" class="reset" id="phreset">Вернуть из списка</button>' : "") +
+                '</div>' +
+              '</div>';
+    } else if (shownPhrase){
       var pi = data.phraseImage;
-      html += '<div class="phrase' + (pi ? " pic" : "") + '"' +
+      html += '<div class="phrase' + (pi ? " pic" : "") + '" data-phrase="1"' +
               (pi ? ' style="background-image:url(\'' + pi + '\')"' : "") + '>' +
-              '<span>' + esc(ph[seed % ph.length]) + '</span></div>';
+              '<span>' + esc(shownPhrase) + '</span>' +
+              (pi ? '<span class="pen">✎</span>' : "") + '</div>';
     }
 
     html += '<div class="week">';
@@ -531,9 +565,24 @@
     on("[data-addsub]", function(el){ addingFor = el.getAttribute("data-addsub"); render(); });
     on("[data-addblock]", function(el){ addingFor = "__" + el.getAttribute("data-addblock"); render(); });
     on("[data-skip]", function(el){ setSkip(el.getAttribute("data-skip"), true); render(); });
+    on("[data-phrase]", function(){ editingPhrase = true; render(); });
     on("[data-addplan]", function(){ addingFor = "__tomorrow"; render(); });
     on("[data-delplan]", function(el){ delTaskOn(tomorrowKey, el.getAttribute("data-delplan")); render(); });
     on("[data-unskip]", function(el){ setSkip(el.getAttribute("data-unskip"), false); render(); });
+
+    var pt = document.getElementById("phtext");
+    if (pt){
+      pt.focus();
+      var savePhrase = function(){ setPhrase(pt.value); editingPhrase = false; render(); };
+      var pok = document.getElementById("phok");
+      if (pok) pok.addEventListener("click", savePhrase);
+      var pres = document.getElementById("phreset");
+      if (pres) pres.addEventListener("click", function(){ setPhrase(""); editingPhrase = false; render(); });
+      pt.addEventListener("keydown", function(e){
+        if (e.key === "Enter" && !e.shiftKey){ e.preventDefault(); savePhrase(); }
+        if (e.key === "Escape"){ editingPhrase = false; render(); }
+      });
+    }
 
     setupInput("newplan", "planok", function(v){ addTaskOn(tomorrowKey, v); });
     setupInput("newsub", "subok", function(v){ addSub(addingFor, v); });
