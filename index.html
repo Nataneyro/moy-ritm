@@ -427,8 +427,9 @@
     }
 
     html += '<div class="week">';
-    for (var i = 6; i >= 0; i--){
-      var dd = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+    var back = (today.getDay() + 6) % 7;          // сколько дней назад был понедельник
+    for (var i = 0; i < 7; i++){
+      var dd = new Date(today.getFullYear(), today.getMonth(), today.getDate() - back + i);
       var k = key(dd);
       var dn = ids.filter(function(id){ return itemDone(k, id); }).length;
       var fill = total ? Math.round(dn/total*100) : 0;
@@ -495,7 +496,7 @@
       var wd = tomorrow.toLocaleDateString("ru-RU", {weekday:"long"});
       html += '<div class="block plan">' +
                 '<div class="block-head">' +
-                  '<div class="block-title"><span class="block-icon">🌙</span>План на завтра' +
+                  '<div class="block-title"><span class="block-icon">' + esc(data.tomorrowIcon || "📝") + '</span>План на завтра' +
                     '<span class="block-time">' + esc(wd) + '</span></div>' +
                   '<div class="block-count">' + (pl.length ? pl.length + (pl.length === 1 ? ' дело' : ' дела') : "") + '</div>' +
                 '</div>' +
